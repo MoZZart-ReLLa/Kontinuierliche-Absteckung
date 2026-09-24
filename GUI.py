@@ -24,9 +24,18 @@ class MainWindow:
 	def __init__(self, root: tk.Tk):
 		self.root = root
 		self.root.title("Kontinuierliche Absteckung")
-		screen_width = self.root.winfo_screenwidth()
-		screen_height = self.root.winfo_screenheight()
-		self.root.geometry(f"{screen_width}x{screen_height}+0+0")
+		#screen_width = self.root.winfo_screenwidth()
+		#screen_height = self.root.winfo_screenheight()
+		#self.root.geometry(f"{screen_width}x{screen_height}+0+0")
+		try:
+			self.root.state("zoomed")            # Windows (und macOS in neueren Tk-Versionen)
+		except tk.TclError:
+			try:
+				self.root.attributes("-zoomed", True)   # Linux
+			except tk.TclError:
+				w = self.root.winfo_screenwidth()
+				h = self.root.winfo_screenheight()
+				self.root.geometry(f"{w}x{h}+0+0")     # Fallback
 
 		self.toolbar = tk.Frame(self.root, padx=10, pady=10)
 		self.toolbar.pack(side=tk.LEFT, fill=tk.Y, anchor=tk.NW)

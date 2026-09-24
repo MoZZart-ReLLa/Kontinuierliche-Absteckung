@@ -170,7 +170,7 @@ def calculate_image_trafo():
 
 ### DRAWING ###
 
-def draw_line(line: Line):
+def transform_line(line: Line):
     global s, R, t
 
     # transform line
@@ -180,6 +180,13 @@ def draw_line(line: Line):
         XYZ = s * (R @ xyz) + t
         transformed_line.points.append(Point(XYZ[0],XYZ[1],XYZ[2],point.number))
 
+    return transformed_line
+
+
+def draw_line(raw_line: Line):
+    
+    line = transform_line(raw_line)
+    
     # draw
     state.tachy_1.laser_on()
     state.tachy_2.laser_on()

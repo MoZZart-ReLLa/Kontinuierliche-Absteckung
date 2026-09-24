@@ -149,7 +149,7 @@ class Tachy:
 
     ### DATA RETRIEVAL COMMANDS ###
 
-    def single_measurement(self, prism_type: BAP_PRISMTYPE):
+    def single_measurement(self, prism_type: PRISMTYPE):
 
         # settings
         if prism_type:
@@ -172,7 +172,7 @@ class Tachy:
         return None
 
 
-    def two_face_measurement(self, prism_type: BAP_PRISMTYPE):
+    def two_face_measurement(self, prism_type: PRISMTYPE):
 
         M1 = self.single_measurement(prism_type)
         if M1 != None:
