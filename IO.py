@@ -3,6 +3,7 @@ import serial.tools.list_ports
 from models import *
 import math
 import time
+import asyncio
 
 
 
@@ -22,8 +23,11 @@ AUT_MakePositioning = "%R1Q,9027:{},{}"
 
 TMC_GetSimpleMea = "%R1Q,2108:1"
 TMC_GetCoordinate = "%R1Q,2082:{},1"
-TMC_DoMeasure = "%R1Q,2008:1,1"
+TMC_DoMeasure = "%R1Q,2008:{},1"
 TMC_GetAngle5 = "%R1Q,2107:1"
+
+AUS_SetUserLockState = "%R1Q,18007:{}"
+AUT_LockIn = "%R1Q,9013:"
 
 TMC_SetEdmMode = "%R1Q,2020:{}"
 BAP_SetPrismType = "%R1Q,17008:{}"
@@ -55,6 +59,10 @@ class Tachy:
         self.position = Point(0, 0, 0)
         self.geocom(TMC_SetStation.format(0,0,0))
         
+        self._laser_state = False
+        self._lock_search = False
+        self._locked = False
+
         self.laser_on()
         
 
@@ -74,6 +82,7 @@ class Tachy:
 
         self.geocom(MOT_StartController.format(2))
         self.laser_off()
+        self._lock_search = False
 
 
 
@@ -161,7 +170,7 @@ class Tachy:
 
         # measurment
         i = 0
-        if self.geocom(TMC_DoMeasure) == GRC_OK:
+        if self.geocom(TMC_DoMeasure.format(1)) == GRC_OK:
             while i < 10:
                 response = self.geocom(TMC_GetCoordinate.format(500))
                 data = response.split(":", 1)[1].split(",")
@@ -195,9 +204,60 @@ class Tachy:
         return hz, v
 
 
+    def read_measurement_data(self):
+        response = self.geocom(TMC_GetCoordinate.format(100))
+        data = response.split(":", 1)[1].split(",")
+        print(data)
+        if data[0] == "0":
+            print(float(data[1]),float(data[2]),float(data[3]))
+            return Point(float(data[1]),float(data[2]),float(data[3]))
+
+
 
     ### TARGET TRACKING COMMANDS ###
+
+    async def lock_on_prism(self):
+
+        self._lock_search = True
+        self.geocom(AUS_SetUserLockState.format(1))
+        self.laser_off()
+
+        while self._lock_search:
+
+            if self.geocom(AUT_LockIn) == GRC_OK:
+                self._lock_search = False
+                self._locked = True
+                self.laser_off()
+
+                return True
+
+            await asyncio.sleep(0.4)
+
+        return False
+
+
+    def lock_off_prism(self):
+
+        self._lock_search = False
+        self.geocom(AUS_SetUserLockState.format(0))
+        self._locked = False
+        self.laser_on()
+
+
+    def start_continues_measurement(self, prism_type: PRISMTYPE):
+
+        if prism_type:
+            self.geocom(TMC_SetEdmMode.format(9))
+            self.geocom(BAP_SetPrismType.format(prism_type))
+            self.geocom(TMC_DoMeasure.format(8))
+        else:
+            self.geocom(TMC_SetEdmMode.format(8))
+            self.geocom(TMC_DoMeasure.format(10))
+
+    
+    def stop_continues_measurement(self):
         
+        self.geocom(TMC_DoMeasure.format(0))
 
 
 
@@ -205,9 +265,11 @@ class Tachy:
 
     def laser_on(self):
 
-        self.geocom(EDM_LASER_ON)
+        if self.geocom(EDM_LASER_ON) == GRC_OK:
+            self._laser_state = True
 
 
     def laser_off(self):
 
-        self.geocom(EDM_LASER_OFF)
+        if self.geocom(EDM_LASER_OFF) == GRC_OK:
+            self._laser_state = False

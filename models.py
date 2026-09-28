@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
+from math import sqrt
 
 
 ### DATACLASS ###
@@ -11,6 +12,19 @@ class Point:
     Y: float
     Z: float
     number: Optional[int] = None
+
+    def distance(self, other: Point):
+        
+        return sqrt( (self.X-other.X)**2 + (self.Y-other.Y)**2 + (self.Z-other.Z)**2 )
+
+    def nearest(self, points: List[Point]):
+
+        if not points:
+            return None, None
+
+        idx, nearest = min(enumerate(points), key=lambda item: self.distance(item[1]))
+        return idx, nearest
+
 
 
 

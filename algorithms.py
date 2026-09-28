@@ -5,14 +5,7 @@ import time
 from IO import Tachy
 import csv
 from math import sin, cos
-
-
-### LOCALS ###
-
-s: float = 1
-R: np.array = None
-t: np.array = None
-
+import asyncio
 
 
 ### CSV ###
@@ -142,10 +135,10 @@ def calculate_image_trafo():
 
     # new Y-axis
     Y = P2_vector - P1_vector
-    s = np.linalg.norm(Y)
-    if s == 0:
+    state.s = np.linalg.norm(Y)
+    if state.s == 0:
         raise ValueError("R1 und R2 dürfen nicht identisch sein.")
-    Y /= s
+    Y /= state.s
 
     # new Z-axis
     Z = np.cross(P3_vector - P1_vector, Y)
@@ -159,10 +152,10 @@ def calculate_image_trafo():
     X /= np.linalg.norm(X)
 
     # rotation matrix
-    R = np.column_stack((X, Y, Z))
+    state.R = np.column_stack((X, Y, Z))
 
     # translation vector
-    t = P1_vector
+    state.t = P1_vector.reshape(-1,1)
 
     return True
 
@@ -171,29 +164,40 @@ def calculate_image_trafo():
 ### DRAWING ###
 
 def transform_line(line: Line):
-    global s, R, t
 
-    # transform line
     transformed_line = Line(line.number,[])
     for point in line.points:
-        xyz = np.array([point.X, point.Y, point.Z])
-        XYZ = s * (R @ xyz) + t
+        xyz = np.array([point.X,point.Y,point.Z]).reshape(-1,1)
+        XYZ = (state.s * (state.R @ xyz) + state.t).flatten()
         transformed_line.points.append(Point(XYZ[0],XYZ[1],XYZ[2],point.number))
 
     return transformed_line
 
 
-def draw_line(raw_line: Line):
+async def draw_line(line: Line, offset=1):
     
-    line = transform_line(raw_line)
-    
-    # draw
-    state.tachy_1.laser_on()
-    state.tachy_2.laser_on()
+    state.drawing = True
 
-    state.tachy_1.fast_aim_at(transformed_line.points[0])
-    state.tachy_2.fast_aim_at(transformed_line.points[0])
+    # transform points
+    line = transform_line(line)
 
-    for point in transformed_line.points:
-        state.tachy_1.aim_at(point)
-        state.tachy_2.aim_at(point)
+    #
+    while state.drawing == True:
+
+        # lock prism
+        state.tachy_1.fast_aim_at(line.points[0])
+        task = asyncio.create_task(state.tachy_1.lock_on_prism())
+
+        await task
+
+        state.tachy_1.start_continues_measurement(state.rover_prism_t)
+
+        # drawing
+        while state.tachy_1._locked == True:
+            position = state.tachy_1.read_measurement_data()
+            index, nearest = position.find_nearest(line)
+
+            state.tachy_2.aim_at(line(index+state.indx_offset))
+
+        state.tachy_1.stop_continues_measurement()
+             

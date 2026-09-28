@@ -23,3 +23,11 @@ rover_prism_height: float = None
 P1: Point = None
 P2: Point = None
 P3: Point = None
+
+s = 1.0
+R = np.array([[1,0,0],[0,1,0],[0,0,1]])
+t = np.array([[0],[0],[0]])
+
+# state values
+drawing = False
+indx_offset = 1

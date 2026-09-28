@@ -6,6 +6,9 @@ from models import *
 from algorithms import *
 import state
 from IO import Tachy
+import asyncio
+import pickle
+import state
 
 
 
@@ -112,6 +115,7 @@ class MainWindow:
 	def stop_all(self):
 		state.tachy_1.stop()
 		state.tachy_2.stop()
+		state.drawing = False
 
 
 	def open_settings_window(self):
@@ -202,12 +206,13 @@ class MainWindow:
 			self.canvas.tag_bind(
 				line_tag,
 				"<Button-1>",
-				lambda event, selected_line=line: self.line_clicked(selected_line)
+				lambda event, selected_line=line: asyncio.run(self.line_clicked(selected_line))
 			)
 
 
-	def line_clicked(self, line: Line):
-		draw_line(line)
+	async def line_clicked(self, line: Line):
+		task = draw_line(line)
+		await task
 
 
 
@@ -315,6 +320,14 @@ class StationWindow:
 		)
 		self.cancel_button.pack(side=tk.LEFT, padx=(0, 8))
 
+		self.last_button = tk.Button(
+			self.action_frame,
+			text="Letzte",
+			width=10,
+			command=self.load_station_values
+		)
+		self.last_button.pack(side=tk.LEFT, padx=(0, 8))
+
 		self.done_button = tk.Button(
 			self.action_frame,
 			text="Fertig", width=10,
@@ -360,7 +373,44 @@ class StationWindow:
 
 		calculate_image_trafo()
 
+		station = {
+			"reference_points": [state.P1, state.P2, state.P3],
+			"prism_heights": [state.prism1_height, state.prism2_height, state.prism3_height, state.rover_prism_height],
+			"s": state.s,
+			"R": state.R,
+			"t": state.t
+		}
+
+		with open("last_station.pkl", "wb") as file:
+			pickle.dump(station, file)
+
 		self.root.destroy()
+
+
+	def load_station_values(self):
+
+		with open("last_station.pkl", "rb") as file:
+			station = pickle.load(file)
+
+			state.P1 = station["reference_points"][0]
+			state.P2 = station["reference_points"][1]
+			state.P3 = station["reference_points"][2]
+
+			state.s = station["s"]
+			state.R = station["R"]
+			state.t = station ["t"]
+			
+			state.prism1_height = station["prism_heights"][0]
+			state.prism2_height = station["prism_heights"][1]
+			state.prism3_height = station["prism_heights"][2]
+			state.rover_prism_height = station["prism_heights"][3]
+		
+		self.root.destroy()
+
+		
+
+
+
 
 
 
