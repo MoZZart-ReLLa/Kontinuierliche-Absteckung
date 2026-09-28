@@ -280,7 +280,6 @@ class StationWindow:
 		self.content.columnconfigure(0, weight=1)
 		self.content.columnconfigure(1, weight=1)
 		self.content.columnconfigure(2, weight=1)
-		self.content.columnconfigure(3, weight=1)
 
 		# Tachy 1
 		tk.Label(self.content, text="Tachy 1", font=("TkDefaultFont", 14, "bold")).grid(row=0, column=0, padx=25, pady=(0, 18), sticky="w")
@@ -302,11 +301,6 @@ class StationWindow:
 		self.prism1_height_entry = FloatPlaceHolderEntry(self.content, width=20, placeholder="Höhe R1 [m]", row=1, column=2, value=state.prism1_height)
 		self.prism2_height_entry = FloatPlaceHolderEntry(self.content, width=20, placeholder="Höhe R2 [m]", row=2, column=2, value=state.prism2_height)
 		self.prism3_height_entry = FloatPlaceHolderEntry(self.content, width=20, placeholder="Höhe R3 [m]", row=3, column=2, value=state.prism3_height)
-
-		# Rover prism setup
-		tk.Label(self.content, text="Rover", font=("TkDefaultFont", 14, "bold")).grid(row=0, column=3, padx=25, pady=(0, 18), sticky="w")
-
-		self.rover_prism_height_entry = FloatPlaceHolderEntry(self.content, width=20, placeholder="Höhe [m]", row=1, column=3, value=state.rover_prism_height)
 
 		# Cancel and Done buttons
 		self.action_frame = tk.Frame(self.root)
@@ -330,7 +324,7 @@ class StationWindow:
 
 		self.done_button = tk.Button(
 			self.action_frame,
-			text="Fertig", width=10,
+			text="Speichern", width=10,
 			command=self.save_station_values
 		)
 		self.done_button.pack(side=tk.LEFT)
@@ -346,7 +340,6 @@ class StationWindow:
 		state.prism1_height = self.prism1_height_entry.get_value()
 		state.prism2_height = self.prism2_height_entry.get_value()
 		state.prism3_height = self.prism3_height_entry.get_value()
-		state.rover_prism_height = self.rover_prism_height_entry.get_value()
 
 		T1P1 = self.tachy1_r1_button.get_value()
 		T1P2 = self.tachy1_r2_button.get_value()
@@ -371,14 +364,15 @@ class StationWindow:
 				state.P2 = correct_height(T2P2, state.prism2_height)
 				state.P3 = correct_height(T2P3, state.prism3_height)
 
-		calculate_image_trafo()
+		pos, hz = calculate_image_trafo()
 
 		station = {
 			"reference_points": [state.P1, state.P2, state.P3],
-			"prism_heights": [state.prism1_height, state.prism2_height, state.prism3_height, state.rover_prism_height],
+			"prism_heights": [state.prism1_height, state.prism2_height, state.prism3_height],
 			"s": state.s,
 			"R": state.R,
-			"t": state.t
+			"t": state.t,
+			"pos_T2": pos
 		}
 
 		with open("last_station.pkl", "wb") as file:
@@ -398,19 +392,17 @@ class StationWindow:
 
 			state.s = station["s"]
 			state.R = station["R"]
-			state.t = station ["t"]
+			state.t = station["t"].reshape(-1,1)
 			
 			state.prism1_height = station["prism_heights"][0]
 			state.prism2_height = station["prism_heights"][1]
 			state.prism3_height = station["prism_heights"][2]
-			state.rover_prism_height = station["prism_heights"][3]
+
+			state.tachy_2.set_station(station["pos_T2"])
 		
 		self.root.destroy()
 
 		
-
-
-
 
 
 
@@ -571,7 +563,7 @@ class PrismTypeSelector(ttk.Combobox):
 			master,
 			values=[self.none_display, *self.display_to_type],
 			state="readonly",
-			width=28,
+			width=24,
 		)
 		self.set_value(value)
 		self.pack(anchor="w", pady=(0, 10))

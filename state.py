@@ -9,6 +9,9 @@ from models import *
 tachy_1 = None
 tachy_2 = None
 
+measure_tachy = None
+drawing_tacky = None
+
 # prism types
 reference_prism_t = PRISMTYPE.PRISM_ROUND
 rover_prism_t = PRISMTYPE.PRISM_360_MINI
@@ -30,4 +33,4 @@ t = np.array([[0],[0],[0]])
 
 # state values
 drawing = False
-indx_offset = 1
+index_offset = 2

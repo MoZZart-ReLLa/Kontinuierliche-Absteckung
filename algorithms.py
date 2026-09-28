@@ -119,12 +119,11 @@ def adjust_station(T1P1, T1P2, T1P3, T2P1, T2P2, T2P3):
     orientation = x[12,0]
     state.tachy_2.set_station(position, orientation)
 
-    print(position, orientation)
+    return position, orientation
 
 
 
 def calculate_image_trafo():
-    global s, R, t
 
     if not all([state.P1, state.P2, state.P3]):
         return False
@@ -152,10 +151,10 @@ def calculate_image_trafo():
     X /= np.linalg.norm(X)
 
     # rotation matrix
-    state.R = np.column_stack((X, Y, Z))
+    state.R = np.column_stack((X, Y, Z)).copy()
 
     # translation vector
-    state.t = P1_vector.reshape(-1,1)
+    state.t = P1_vector.reshape(-1,1).copy()
 
     return True
 
@@ -181,12 +180,20 @@ async def draw_line(line: Line, offset=1):
     # transform points
     line = transform_line(line)
 
+    # 
+    start_point = line.points[0]
+
+    state.tachy_2.fast_aim_at(start_point)
+    state.tachy_2.laser_on()
+
+    start_point.Z += state.rover_prism_height
+    state.tachy_1.fast_aim_at(start_point)
+
     #
     while state.drawing == True:
 
         # lock prism
-        state.tachy_1.fast_aim_at(line.points[0])
-        task = asyncio.create_task(state.tachy_1.lock_on_prism())
+        task = asyncio.create_task(state.tachy_2.lock_on_prism())
 
         await task
 
@@ -194,10 +201,21 @@ async def draw_line(line: Line, offset=1):
 
         # drawing
         while state.tachy_1._locked == True:
-            position = state.tachy_1.read_measurement_data()
-            index, nearest = position.find_nearest(line)
 
-            state.tachy_2.aim_at(line(index+state.indx_offset))
+            position = state.tachy_1.read_measurement_data()
+
+            if position:
+                position.Z -= state.rover_prism_height
+                index, nearest = position.nearest(line.points)
+
+                if line.points[-1].distance(position) < 0.02:
+                    state.drawing = False
+                    break
+
+                new_index = min([len(line.points)-1, index+state.index_offset])
+                state.tachy_2.aim_at(line.points[new_index])
 
         state.tachy_1.stop_continues_measurement()
+
+        state.tachy_2.laser_off()
              

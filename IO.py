@@ -43,7 +43,6 @@ AUT_FineAdjust = "%R1Q,9037:{},{}"
 
 
 
-
 ### Tachyometer Class ###
 
 class Tachy:
@@ -58,6 +57,8 @@ class Tachy:
 
         self.position = Point(0, 0, 0)
         self.geocom(TMC_SetStation.format(0,0,0))
+
+        self.geocom(TMC_DoMeasure.format(0))
         
         self._laser_state = False
         self._lock_search = False
@@ -73,7 +74,7 @@ class Tachy:
 
         response = self.serial_connection.read_until().decode("ascii").strip()
 
-        #print(f"Command: {command} | Response: {response}")
+        print(f"Command: {command} | Response: {response}")
 
         return response
 
@@ -89,13 +90,14 @@ class Tachy:
 
     ### DEVICE SETTINGS ###
 
-    def set_station(self, position: Point, hz_correction: float):
+    def set_station(self, position: Point, hz_correction = None):
 
         self.position = position
         res = self.geocom(TMC_SetStation.format(position.X, position.Y, position.Z))
 
-        hz, v = self.angle_measurement()
-        res = self.geocom(TMC_SetOrientation.format(hz - hz_correction))
+        if hz_correction:
+            hz, v = self.angle_measurement()
+            res = self.geocom(TMC_SetOrientation.format(hz - hz_correction))
 
 
 
@@ -160,7 +162,6 @@ class Tachy:
 
     def single_measurement(self, prism_type: PRISMTYPE):
 
-        # settings
         if prism_type:
             self.geocom(TMC_SetEdmMode.format(2))
             self.geocom(BAP_SetPrismType.format(prism_type))
@@ -168,7 +169,6 @@ class Tachy:
         else:
             self.geocom(TMC_SetEdmMode.format(5))
 
-        # measurment
         i = 0
         if self.geocom(TMC_DoMeasure.format(1)) == GRC_OK:
             while i < 10:
@@ -205,11 +205,9 @@ class Tachy:
 
 
     def read_measurement_data(self):
-        response = self.geocom(TMC_GetCoordinate.format(100))
+        response = self.geocom(TMC_GetCoordinate.format(200))
         data = response.split(":", 1)[1].split(",")
-        print(data)
         if data[0] == "0":
-            print(float(data[1]),float(data[2]),float(data[3]))
             return Point(float(data[1]),float(data[2]),float(data[3]))
 
 
@@ -217,7 +215,6 @@ class Tachy:
     ### TARGET TRACKING COMMANDS ###
 
     async def lock_on_prism(self):
-
         self._lock_search = True
         self.geocom(AUS_SetUserLockState.format(1))
         self.laser_off()
@@ -227,11 +224,8 @@ class Tachy:
             if self.geocom(AUT_LockIn) == GRC_OK:
                 self._lock_search = False
                 self._locked = True
-                self.laser_off()
 
                 return True
-
-            await asyncio.sleep(0.4)
 
         return False
 
@@ -247,7 +241,7 @@ class Tachy:
     def start_continues_measurement(self, prism_type: PRISMTYPE):
 
         if prism_type:
-            self.geocom(TMC_SetEdmMode.format(9))
+            self.geocom(TMC_SetEdmMode.format(7))
             self.geocom(BAP_SetPrismType.format(prism_type))
             self.geocom(TMC_DoMeasure.format(8))
         else:

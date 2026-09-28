@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-from enum import Enum
+from enum import IntEnum
 from math import sqrt
 
 
@@ -35,7 +35,7 @@ class Line:
 
 
 
-class PRISMTYPE(Enum):
+class PRISMTYPE(IntEnum):
     PRISM_ROUND = 0  # Leica circular prism
     PRISM_MINI = 1  # Leica mini prism
     PRISM_TAPE = 2  # Leica reflector tape
