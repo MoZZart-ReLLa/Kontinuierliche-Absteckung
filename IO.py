@@ -58,7 +58,8 @@ class Tachy:
         self.position = Point(0, 0, 0)
         self.geocom(TMC_SetStation.format(0,0,0))
 
-        self.geocom(TMC_DoMeasure.format(0))
+        self.stop_continues_measurement()
+        self.lock_off_prism()
         
         self._laser_state = False
         self._lock_search = False
@@ -74,14 +75,13 @@ class Tachy:
 
         response = self.serial_connection.read_until().decode("ascii").strip()
 
-        print(f"Command: {command} | Response: {response}")
+        #print(f"Command: {command} | Response: {response}")
 
         return response
 
 
     def stop(self):
 
-        self.geocom(MOT_StartController.format(2))
         self.laser_off()
         self._lock_search = False
 
@@ -160,9 +160,9 @@ class Tachy:
 
     ### DATA RETRIEVAL COMMANDS ###
 
-    def single_measurement(self, prism_type: PRISMTYPE):
+    def single_measurement(self, prism_type: PRISMTYPE = None):
 
-        if prism_type:
+        if prism_type != None:
             self.geocom(TMC_SetEdmMode.format(2))
             self.geocom(BAP_SetPrismType.format(prism_type))
             self.geocom(AUT_FineAdjust.format(0,0))
@@ -252,6 +252,7 @@ class Tachy:
     def stop_continues_measurement(self):
         
         self.geocom(TMC_DoMeasure.format(0))
+        self.geocom(TMC_SetEdmMode.format(2))
 
 
 

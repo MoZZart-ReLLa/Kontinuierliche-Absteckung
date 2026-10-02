@@ -4,7 +4,7 @@ from models import *
 import time
 from IO import Tachy
 import csv
-from math import sin, cos
+from math import sin, cos, sqrt
 import asyncio
 
 
@@ -170,7 +170,7 @@ def transform_line(line: Line):
         XYZ = (state.s * (state.R @ xyz) + state.t).flatten()
         transformed_line.points.append(Point(XYZ[0],XYZ[1],XYZ[2],point.number))
 
-    return transformed_line
+    return transformed_line  
 
 
 async def draw_line(line: Line, offset=1):
@@ -183,39 +183,40 @@ async def draw_line(line: Line, offset=1):
     # 
     start_point = line.points[0]
 
-    state.tachy_2.fast_aim_at(start_point)
-    state.tachy_2.laser_on()
+    state.drawing_tachy.fast_aim_at(start_point)
+    state.drawing_tachy.laser_on()
 
     start_point.Z += state.rover_prism_height
-    state.tachy_1.fast_aim_at(start_point)
+    state.measure_tachy.fast_aim_at(start_point)
 
     #
     while state.drawing == True:
 
         # lock prism
-        task = asyncio.create_task(state.tachy_2.lock_on_prism())
+        task = asyncio.create_task(state.measure_tachy.lock_on_prism())
 
         await task
 
-        state.tachy_1.start_continues_measurement(state.rover_prism_t)
+        state.measure_tachy.start_continues_measurement(state.rover_prism_t)
 
         # drawing
-        while state.tachy_1._locked == True:
+        while state.measure_tachy._locked == True:
 
-            position = state.tachy_1.read_measurement_data()
+            position = state.measure_tachy.read_measurement_data()
 
             if position:
                 position.Z -= state.rover_prism_height
                 index, nearest = position.nearest(line.points)
 
-                if line.points[-1].distance(position) < 0.02:
+                if index == len(line.points)-1:
                     state.drawing = False
                     break
+                
+                print(index,"/",len(line.points)-1)
 
-                new_index = min([len(line.points)-1, index+state.index_offset])
-                state.tachy_2.aim_at(line.points[new_index])
+                new_index = min([index+state.index_offset, len(line.points)-1])
+                state.drawing_tachy.aim_at(line.points[new_index])
 
-        state.tachy_1.stop_continues_measurement()
-
-        state.tachy_2.laser_off()
+        state.measure_tachy.stop_continues_measurement()
+        state.drawing_tachy.laser_off()
              

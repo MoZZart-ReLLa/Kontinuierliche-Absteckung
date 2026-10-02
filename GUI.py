@@ -9,6 +9,7 @@ from IO import Tachy
 import asyncio
 import pickle
 import state
+import threading
 
 
 
@@ -16,6 +17,8 @@ import state
 
 tachy1_port: str = None
 tachy2_port: str = None
+
+rover_tachy: int = 1
 
 image_file_path: str = None
 
@@ -113,9 +116,9 @@ class MainWindow:
 
 
 	def stop_all(self):
+		state.drawing = False
 		state.tachy_1.stop()
 		state.tachy_2.stop()
-		state.drawing = False
 
 
 	def open_settings_window(self):
@@ -211,57 +214,99 @@ class MainWindow:
 
 
 	async def line_clicked(self, line: Line):
-		task = draw_line(line)
-		await task
+		if state.drawing:
+			print("Zeichnen läuft bereits...")
+			return
+			
+		threading.Thread(
+            target=self._run_async_draw, 
+            args=(line,), 
+            daemon=True
+        ).start()
+
+
+	def _run_async_draw(self, line: Line):
+		asyncio.run(draw_line(line))
 
 
 
 class SettingsWindow:
 
-	def __init__(self, root: tk.Toplevel, main_window: MainWindow):
-		self.root = root
-		self.root.title("Einstellungen")
-		self.root.geometry("520x330")
-		self.root.minsize(520, 330)
+    def __init__(self, root: tk.Toplevel, main_window: MainWindow):
+        global rover_tachy
 
-		self.main_window = main_window
+        self.root = root
+        self.root.title("Einstellungen")
+        self.root.geometry("500x340")
+        self.root.minsize(500, 340)
 
-		self.content = tk.Frame(self.root, padx=20, pady=20)
-		self.content.pack(fill=tk.BOTH, expand=True)
+        self.main_window = main_window
 
-		tk.Label(self.content, text="Tachy 1").pack(anchor="w", pady=(0, 2))
-		self.tachy1_port_combobox = ComPortSelector(self.content, tachy1_port)
+        self.content = tk.Frame(self.root, padx=20, pady=20)
+        self.content.pack(fill=tk.BOTH, expand=True)
 
-		tk.Label(self.content, text="Tachy 2").pack(anchor="w", pady=(0, 2))
-		self.tachy2_port_combobox = ComPortSelector(self.content, tachy2_port)
+        self.rover_var = tk.IntVar(value=rover_tachy)
 
-		tk.Label(self.content, text="Referenz").pack(anchor="w", pady=(0, 2))
-		self.reference_prism_constant_entry = PrismTypeSelector(self.content, value=state.reference_prism_t)
+        self.tachy1_port_combobox = self._build_port_row("Tachy 1", tachy1_port, 1)
+        self.tachy2_port_combobox = self._build_port_row("Tachy 2", tachy2_port, 2)
 
-		tk.Label(self.content, text="Rover").pack(anchor="w", pady=(0, 2))
-		self.rover_prism_constant_entry = PrismTypeSelector(self.content, value=state.rover_prism_t)
+        tk.Label(self.content, text="Referenz").pack(anchor="w", pady=(0, 2))
+        self.reference_prism_constant_entry = PrismTypeSelector(self.content, value=state.reference_prism_t)
+        self.reference_prism_constant_entry.pack(anchor="w", pady=(0, 10))
 
-		self.action_frame = tk.Frame(self.root)
-		self.action_frame.pack(side=tk.BOTTOM, anchor=tk.E, padx=20, pady=15)
-		tk.Button(self.action_frame, text="Abbruch", command=self.root.destroy).pack(side=tk.LEFT, padx=(0, 8))
-		tk.Button(self.action_frame, text="Fertig", command=self.save_settings).pack(side=tk.LEFT)
+        tk.Label(self.content, text="Rover").pack(anchor="w", pady=(0, 2))
+        rover_row = tk.Frame(self.content)
+        rover_row.pack(anchor="w", pady=(0, 10))
+
+        self.rover_prism_constant_entry = PrismTypeSelector(rover_row, value=state.rover_prism_t)
+        self.rover_prism_constant_entry.pack(side=tk.LEFT)
+
+        self.rover_prism_height_entry = FloatPlaceHolderEntry(rover_row, placeholder="Höhe (m)", value=state.rover_prism_height, width=12)
+        self.rover_prism_height_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.action_frame = tk.Frame(self.root)
+        self.action_frame.pack(side=tk.BOTTOM, anchor=tk.E, padx=20, pady=15)
+        tk.Button(self.action_frame, text="Abbruch", command=self.root.destroy).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(self.action_frame, text="Fertig", command=self.save_settings).pack(side=tk.LEFT)
 
 
-	def save_settings(self):
-		global tachy1_port, tachy2_port
+    def _build_port_row(self, label, port, value):
+        tk.Label(self.content, text=label).pack(anchor="w", pady=(0, 2))
+        row = tk.Frame(self.content)
+        row.pack(anchor="w", pady=(0, 10))
 
-		if tachy1_port != self.tachy1_port_combobox.get_device():	
-			tachy1_port = self.tachy1_port_combobox.get_device()
-			state.tachy_1 = Tachy(tachy1_port)
+        selector = ComPortSelector(row, port)
+        selector.pack(side=tk.LEFT)
+        
+        # Radiobutton statt Checkbutton nutzt die gemeinsame rover_var
+        tk.Radiobutton(row, variable=self.rover_var, value=value).pack(side=tk.LEFT, padx=(8, 0))
+        return selector
 
-		if tachy2_port != self.tachy2_port_combobox.get_device():	
-			tachy2_port = self.tachy2_port_combobox.get_device()
-			state.tachy_2 = Tachy(tachy2_port)
 
-		state.reference_prism_t = self.reference_prism_constant_entry.get_value()
-		state.rover_prism_t = self.rover_prism_constant_entry.get_value()
+    def save_settings(self):
+        global tachy1_port, tachy2_port
 
-		self.root.destroy()
+        if tachy1_port != self.tachy1_port_combobox.get_device():   
+            tachy1_port = self.tachy1_port_combobox.get_device()
+            state.tachy_1 = Tachy(tachy1_port)
+
+        if tachy2_port != self.tachy2_port_combobox.get_device():   
+            tachy2_port = self.tachy2_port_combobox.get_device()
+            state.tachy_2 = Tachy(tachy2_port)
+
+        state.reference_prism_t = self.reference_prism_constant_entry.get_value()
+        state.rover_prism_t = self.rover_prism_constant_entry.get_value()
+
+        state.rover_prism_height = self.rover_prism_height_entry.get_value() or 0.0
+        
+        if self.rover_var.get() == 1:
+            state.measure_tachy = state.tachy_1
+            state.drawing_tachy = state.tachy_2
+        else:
+            state.measure_tachy = state.tachy_2
+            state.drawing_tachy = state.tachy_1
+
+        self.root.destroy()
 
 
 
@@ -270,8 +315,8 @@ class StationWindow:
 	def __init__(self, root: tk.Toplevel, main_window: MainWindow):
 		self.root = root
 		self.root.title("Stationierung")
-		self.root.geometry("900x320")
-		self.root.minsize(900, 320)
+		self.root.geometry("750x320")
+		self.root.minsize(750, 320)
 
 		self.main_window = main_window
 
@@ -349,22 +394,23 @@ class StationWindow:
 		T2P3 = self.tachy2_r3_button.get_value()
 
 		if state.tachy_1 is not None and state.tachy_2 is not None:
-			adjust_station(correct_height(T1P1, state.prism1_height),
-						   correct_height(T1P2, state.prism2_height),
-						   correct_height(T1P3, state.prism3_height),
-						   correct_height(T2P1, state.prism1_height),
-						   correct_height(T2P2, state.prism2_height),
-						   correct_height(T2P3, state.prism3_height))
+			pos, hz = adjust_station(
+				correct_height(T1P1, state.prism1_height),
+				correct_height(T1P2, state.prism2_height),
+				correct_height(T1P3, state.prism3_height),
+				correct_height(T2P1, state.prism1_height),
+				correct_height(T2P2, state.prism2_height),
+				correct_height(T2P3, state.prism3_height))
 		elif state.tachy_1:
-				state.P1 = correct_height(T1P1, state.prism1_height)
-				state.P2 = correct_height(T1P2, state.prism2_height)
-				state.P3 = correct_height(T1P3, state.prism3_height)
+			state.P1 = correct_height(T1P1, state.prism1_height)
+			state.P2 = correct_height(T1P2, state.prism2_height)
+			state.P3 = correct_height(T1P3, state.prism3_height)
 		elif state.tachy_2:
-				state.P1 = correct_height(T2P1, state.prism1_height)
-				state.P2 = correct_height(T2P2, state.prism2_height)
-				state.P3 = correct_height(T2P3, state.prism3_height)
+			state.P1 = correct_height(T2P1, state.prism1_height)
+			state.P2 = correct_height(T2P2, state.prism2_height)
+			state.P3 = correct_height(T2P3, state.prism3_height)
 
-		pos, hz = calculate_image_trafo()
+		calculate_image_trafo()
 
 		station = {
 			"reference_points": [state.P1, state.P2, state.P3],
@@ -546,7 +592,6 @@ class ComPortSelector(ttk.Combobox):
 		super().__init__(master, values=port_displays, state="readonly", width=48)
 		if value:
 			self.set(next((display for display, device in self.display_to_device.items() if device == value), value))
-		self.pack(anchor="w", pady=(0, 10))
 
 
 	def get_device(self):
@@ -566,7 +611,6 @@ class PrismTypeSelector(ttk.Combobox):
 			width=24,
 		)
 		self.set_value(value)
-		self.pack(anchor="w", pady=(0, 10))
 
 	def set_value(self, value):
 		if value is None:
